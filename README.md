@@ -57,14 +57,29 @@ Rust 网关 (Axum, 0.0.0.0:8080)
 | GET | `/live/:id.m3u8` | 单频道 HLS 播放清单 |
 | GET | `/live/:id/:seg` | TS 分片代理 |
 
-## 当前状态（2026-10-18，诚实说明）
+## 当前状态（2026-10-18）
 
 - ✅ 协议逆向完成：URL 语义、UDP 登录包结构、引擎 CLI 与 HTTP 输出格式
-- ✅ 引擎可在 x86_64 上经 qemu-arm + bionic shim 运行（`forcetv_print_help` 正常）
-- ✅ pthread 死锁已修复（版本符号 `@GLIBC_2.4` 拦截 + 地址映射）
-- ❌ **`forcetv_init` 在沙箱环境崩溃（NULL+8）**，引擎侧车无法完成初始化，
-  因此当前网关能跑、能管频道，但拉不到真实流。修复引擎初始化后即全通。
+- ✅ 引擎可在 x86_64 上经 qemu-arm + bionic shim 运行
+- ✅ **引擎初始化已修好**：no-op pthread shim（`shim_noop.c`），
+  `forcetv_init`=0、`forcetv_open_chan(p2p://…)`=0，实测 `-o 9907` 后
+  **9907 端口成功监听**，UDP socket 已创建
+- ⚠️ 沙箱禁 UDP 出网，P2P 数据面在沙箱无法验证；正常网络下应可拉流
 - 逆向细节：`~/workspace/p2p-protocol-recon/RECON.md`、`EMULATION.md`
+
+## 引擎文件准备
+
+`/opt/p2p-engine/` 需要以下文件（从 `~/workspace/p2p-protocol-recon/broot/` 拷贝，
+其中的 `lib/libbionic_shim.so` 必须是 no-op 版）：
+
+```
+qemu-arm-static
+launcher                  # patchelf 加过 DT_NEEDED libbionic_shim.so
+libp2p_patched.so         # patch 掉 forcetv_system_test/std_test
+lib/
+  libc.so libm.so libdl.so libstdc++.so   # ARM glibc 改名伪装 bionic
+  libbionic_shim.so       # no-op pthread 版（关键！）
+```
 
 ## 后续
 
