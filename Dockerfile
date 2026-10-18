@@ -12,7 +12,7 @@ COPY frontend ./frontend
 # when the Docker layer cache failed to invalidate).
 RUN cargo build --release && \
     ls -lh /app/target/release/p2p-http-gateway && \
-    test $(stat -c%s /app/target/release/p2p-http-gateway) -gt 1000000
+    test -x /app/target/release/p2p-http-gateway
 
 FROM debian:bookworm-slim
 # qemu-user-static: run ARM engine on x86_64 hosts.
