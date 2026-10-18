@@ -6,13 +6,15 @@
 FROM rust:1.89-bookworm AS builder
 WORKDIR /app
 COPY Cargo.toml ./
+# Cache deps first (dummy main to compile deps)
+RUN mkdir src && echo 'fn main(){}' > src/main.rs && \
+    cargo build --release && rm -rf src
 COPY src ./src
 COPY frontend ./frontend
-# Single build: no dummy-main caching trick (it caused stale binaries
-# when the Docker layer cache failed to invalidate).
 RUN cargo build --release && \
     ls -lh /app/target/release/p2p-http-gateway && \
-    test -x /app/target/release/p2p-http-gateway
+    strings /app/target/release/p2p-http-gateway | grep -q "p2p-http-gateway listening on" && \
+    echo "binary OK: real gateway binary confirmed"
 
 FROM debian:bookworm-slim
 # qemu-user-static: run ARM engine on x86_64 hosts.
