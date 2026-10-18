@@ -26,25 +26,25 @@ Rust 网关 (Axum, 0.0.0.0:8080)
 
 ## 快速开始
 
-1. 准备引擎目录（ARM 二进制 + shim，见 `~/workspace/p2p-protocol-recon/broot/`）：
-   ```
-   /opt/p2p-engine/
-     qemu-arm-static
-     launcher                  # patchelf 加过 DT_NEEDED libbionic_shim.so
-     libp2p_patched.so         # patch 掉 forcetv_system_test/std_test 的版本
-     lib/
-       libc.so libm.so libdl.so libstdc++.so   # ARM glibc 改名伪装 bionic
-       libbionic_shim.so       # 自研 bionic 兼容层
-   ```
+镜像已内置引擎（qemu-arm-static + ARM 引擎 + bionic shim），开箱即用：
 
-2. 构建运行：
-   ```bash
-   cargo build --release
-   ENGINE_ROOT=/opt/p2p-engine BIND=0.0.0.0:8080 ./target/release/p2p-http-gateway
-   ```
+```bash
+docker run -d --name mitv -p 8080:8080 ghcr.io/judy-gotv/mitv:latest
+```
 
-3. 浏览器打开 `http://服务器IP:8080/`，粘贴 `p2p://` 链接添加频道，
-   复制 `/live/<id>.m3u8` 到 APTV 播放；或直接订阅 `/playlist.m3u`。
+浏览器打开 `http://服务器IP:8080/`，粘贴 `p2p://` 链接添加频道，
+复制 `/live/<id>.m3u8` 到 APTV 播放；或直接订阅 `/playlist.m3u`。
+
+## 引擎文件说明
+
+引擎文件已打包进镜像的 `/opt/p2p-engine/`：
+```
+qemu-arm-static           # apt 安装（x86_64 上跑 ARM 引擎用）
+launcher                  # ARM 启动器（patchelf 加过 DT_NEEDED）
+libp2p_patched.so         # patch 掉 forcetv_system_test/std_test
+lib/                      # ARM glibc（伪装 bionic）+ no-op 版 libbionic_shim.so
+```
+如需替换引擎文件，可 `-v` 挂载覆盖 `/opt/p2p-engine`。
 
 ## API
 

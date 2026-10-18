@@ -30,7 +30,7 @@ async fn spawn_sidecar(state: &Arc<AppState>, id: &str) {
         Some(c) => c,
         None => return,
     };
-    let qemu = format!("{}/qemu-arm-static", state.engine_root);
+    let qemu = std::env::var("QEMU_ARM_STATIC").unwrap_or_else(|_| "qemu-arm-static".to_string());
     let launcher = format!("{}/launcher", state.engine_root);
     let so = format!("{}/libp2p_patched.so", state.engine_root);
 

@@ -1,9 +1,7 @@
 # Author: Passwd Word
 # Multi-stage build for p2p-http-gateway.
-# NOTE: the engine sidecar (qemu-arm + ARM .so) is NOT in this image;
-# mount it at /opt/p2p-engine and set ENGINE_ROOT accordingly.
-# The engine itself is ARM; on x86_64 hosts the sidecar needs qemu-arm-static
-# either in the image or on the host. See README.md.
+# This image is self-contained: it includes the Rust gateway AND the
+# ARM P2P engine sidecar (qemu-arm + libforcetv.so + bionic shim).
 
 FROM rust:1.89-bookworm AS builder
 WORKDIR /app
@@ -16,11 +14,16 @@ COPY frontend ./frontend
 RUN cargo build --release
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+# qemu-user-static: run ARM engine on x86_64 hosts.
+# (On arm64 hosts the 32-bit ARM engine runs natively via kernel compat.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates qemu-user-static \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/p2p-http-gateway /app/
 COPY frontend ./frontend
+# Engine sidecar files (ARM): launcher, libp2p_patched.so, lib/
+COPY engine /opt/p2p-engine
 ENV BIND=0.0.0.0:8080
 ENV ENGINE_ROOT=/opt/p2p-engine
 EXPOSE 8080
