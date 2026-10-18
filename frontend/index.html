@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<!-- Author: Passwd Word -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P 转 HTTP 网关</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: #0f1419; color: #e7e9ea; padding: 16px; max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #71767b; font-size: 13px; margin-bottom: 16px; }
+  .card { background: #161d24; border: 1px solid #2f3336; border-radius: 12px;
+          padding: 14px; margin-bottom: 12px; }
+  label { display: block; font-size: 13px; color: #71767b; margin-bottom: 6px; }
+  input[type=text] { width: 100%; background: #0f1419; border: 1px solid #2f3336;
+          border-radius: 8px; color: #e7e9ea; padding: 10px; font-size: 14px; margin-bottom: 10px; }
+  button { background: #1d9bf0; border: none; border-radius: 8px; color: #fff;
+           padding: 10px 18px; font-size: 14px; cursor: pointer; }
+  button:active { opacity: .8; }
+  button.danger { background: #f4212e; }
+  button.ghost { background: transparent; border: 1px solid #2f3336; color: #e7e9ea;
+           padding: 6px 12px; font-size: 12px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot.live { background: #00ba7c; box-shadow: 0 0 6px #00ba7c; }
+  .dot.starting { background: #ffd400; }
+  .dot.error { background: #f4212e; }
+  .ch-name { font-size: 15px; font-weight: 600; }
+  .ch-meta { font-size: 12px; color: #71767b; margin-top: 4px; word-break: break-all; }
+  .ch-url { font-size: 12px; color: #1d9bf0; word-break: break-all; margin-top: 6px; }
+  .actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .empty { text-align: center; color: #71767b; padding: 30px 0; font-size: 14px; }
+  .sub-link { font-size: 13px; color: #71767b; margin: 12px 0; }
+  .sub-link a { color: #1d9bf0; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+           background: #1d9bf0; color: #fff; padding: 10px 20px; border-radius: 8px;
+           font-size: 14px; display: none; }
+  @media (max-width: 480px) {
+    body { padding: 12px; }
+    h1 { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<h1>📡 P2P 转 HTTP 网关</h1>
+<div class="sub">把 <code>p2p://IP:19806/…</code> 转成 APTV 可播的 HTTP 链接</div>
+
+<div class="card">
+  <label>添加频道（粘贴 p2p:// 或 mitv:// 链接）</label>
+  <input type="text" id="url" placeholder="p2p://135.148.104.228:19806/5a4bab6df92748c0b6e4040dd157bdab">
+  <label>频道名称（可选）</label>
+  <input type="text" id="name" placeholder="广东体育">
+  <button onclick="addChannel()">添加频道</button>
+</div>
+
+<div class="sub-link">📋 聚合订阅（APTV 用）：<a id="sublink" href="/playlist.m3u">/playlist.m3u</a></div>
+
+<div id="list"></div>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2000);
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function refresh() {
+  try {
+    const chs = await api('/api/channels');
+  } catch (e) { return; }
+  const box = $('list');
+  if (!chs.length) {
+    box.innerHTML = '<div class="empty">暂无频道，粘贴 p2p:// 链接添加一个吧</div>';
+    return;
+  }
+  box.innerHTML = chs.map(ch => {
+    const dot = ch.status === 'live' ? 'live' : ch.status === 'starting' ? 'starting' : 'error';
+    const playUrl = location.origin + '/live/' + ch.id + '.m3u8';
+    return `<div class="card">
+      <div class="row"><span class="dot ${dot}"></span><span class="ch-name">${esc(ch.name)}</span></div>
+      <div class="ch-meta">状态：${ch.status} ｜ ${esc(ch.detail)} ｜ 引擎端口 ${ch.engine_port}</div>
+      <div class="ch-url">${playUrl}</div>
+      <div class="actions">
+        <button class="ghost" onclick="copyUrl('${ch.id}')">复制播放地址</button>
+        <button class="ghost danger" onclick="delChannel('${ch.id}')">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+async function addChannel() {
+  const url = $('url').value.trim();
+  const name = $('name').value.trim();
+  if (!url) { toast('请粘贴 p2p:// 链接'); return; }
+  try {
+    await api('/api/channels', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, name: name || null})
+    });
+    $('url').value = ''; $('name').value = '';
+    toast('已添加，引擎启动中…');
+    refresh();
+  } catch (e) { toast('添加失败：' + e.message); }
+}
+
+async function delChannel(id) {
+  if (!confirm('删除这个频道？')) return;
+  await fetch('/api/channels/' + id, {method: 'DELETE'});
+  refresh();
+}
+
+function copyUrl(id) {
+  const url = location.origin + '/live/' + id + '.m3u8';
+  navigator.clipboard.writeText(url).then(() => toast('播放地址已复制'));
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
