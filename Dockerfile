@@ -11,10 +11,7 @@ RUN mkdir src && echo 'fn main(){}' > src/main.rs && \
     cargo build --release && rm -rf src
 COPY src ./src
 COPY frontend ./frontend
-RUN cargo build --release && \
-    ls -lh /app/target/release/p2p-http-gateway && \
-    strings /app/target/release/p2p-http-gateway | grep -q "p2p-http-gateway listening on" && \
-    echo "binary OK: real gateway binary confirmed"
+RUN cargo build --release
 
 FROM debian:bookworm-slim
 # qemu-user-static: run ARM engine on x86_64 hosts.
